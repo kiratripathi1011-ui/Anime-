@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .glow-purple {
+    filter: drop-shadow(0 0 25px rgba(168, 85, 247, 0.45));
+  }
+  .glow-crimson {
+    filter: drop-shadow(0 0 25px rgba(239, 68, 68, 0.45));
+  }
+}
+
+@keyframes pulseSlow {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 0.5;
+  }
+  50% {
+    transform: scale(1.15) rotate(180deg);
+    opacity: 0.8;
+  }
+}
+
+.animate-aurora {
+  animation: pulseSlow 14s ease-in-out infinite;
+}
+
+/* Custom scrollbar and baseline styling */
+html {
+  scroll-behavior: smooth;
+  background-color: #060608;
+  color: #ffffff;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #060608;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #27272a;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f46;
+}
