@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   Circle,
   ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 
 export interface AnimeItem {
@@ -104,12 +105,21 @@ async function fetchAniList(query: string, variables: any = {}) {
   }
 }
 
-// Complete Multi-Server Configuration matching your screenshots
+// Format slug for title-based anime streams
+function getCleanSlug(title: string): string {
+  return (title || "anime")
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-");
+}
+
+// Active working anime stream servers
 interface ServerSource {
   id: string;
   name: string;
   status: string;
-  getUrl: (mal: number, ani: number, ep: number) => string;
+  getUrl: (anime: AnimeItem, ep: number) => string;
 }
 
 const SERVERS: ServerSource[] = [
@@ -117,65 +127,49 @@ const SERVERS: ServerSource[] = [
     id: "nitro",
     name: "Nitro - [Multi-Lang]",
     status: "Ready",
-    getUrl: (mal, ani, ep) => `https://vidsrc.cc/v2/embed/anime/${mal}/${ep}/sub`,
+    getUrl: (anime, ep) => `https://vidlink.pro/anime/${anime.malId || anime.anilistId}/${ep}`,
   },
   {
     id: "mhply",
     name: "MhPly - [Multi-Lang]",
     status: "Ready",
-    getUrl: (mal, ani, ep) => `https://vidlink.pro/anime/${mal}/${ep}`,
+    getUrl: (anime, ep) => `https://vidsrc.cc/v2/embed/anime/${anime.malId || anime.anilistId}/${ep}/sub`,
   },
   {
     id: "castvid",
     name: "CastVid",
     status: "Ready",
-    getUrl: (mal, ani, ep) => `https://player.autoembed.cc/embed/anime/${mal}/${ep}`,
+    getUrl: (anime, ep) => `https://player.autoembed.cc/embed/anime/${getCleanSlug(anime.name)}/${ep}`,
   },
   {
     id: "stremfx",
     name: "StremFx",
     status: "Ready",
-    getUrl: (mal, ani, ep) => `https://vidsrc.xyz/embed/anime/${mal}/${ep}`,
+    getUrl: (anime, ep) => `https://anime.autoembed.cc/embed/${getCleanSlug(anime.romajiName)}/${ep}`,
   },
   {
     id: "citadel",
     name: "Citadel",
     status: "Ready",
-    getUrl: (mal, ani, ep) => `https://multiembed.mov/?video_id=${mal}&an=1&ep=${ep}`,
-  },
-  {
-    id: "vidstpm",
-    name: "VidStpM",
-    status: "Ready",
-    getUrl: (mal, ani, ep) => `https://vidsrc.pm/embed/anime/${mal}/${ep}`,
+    getUrl: (anime, ep) => `https://vidsrc.icu/embed/anime/${anime.malId || anime.anilistId}/${ep}`,
   },
   {
     id: "vidhindi",
     name: "VidHindi",
     status: "Ready",
-    getUrl: (mal, ani, ep) => `https://vidsrc.cc/v2/embed/anime/${mal}/${ep}/dub`,
+    getUrl: (anime, ep) => `https://vidsrc.cc/v2/embed/anime/${anime.malId || anime.anilistId}/${ep}/dub`,
   },
   {
-    id: "videmd",
-    name: "VidEmd",
+    id: "official",
+    name: "Official HD Stream",
     status: "Ready",
-    getUrl: (mal, ani, ep) => `https://www.2embed.cc/embedmal/${mal}`,
-  },
-  {
-    id: "vidpro",
-    name: "VidPro",
-    status: "Ready",
-    getUrl: (mal, ani, ep) => `https://vidsrc.pro/embed/anime/${mal}/${ep}/sub`,
-  },
-  {
-    id: "vidbo",
-    name: "VidBo",
-    status: "Ready",
-    getUrl: (mal, ani, ep) => `https://vidsrc.rip/embed/anime/${mal}/${ep}`,
+    getUrl: (anime) =>
+      anime.trailerId
+        ? `https://www.youtube-nocookie.com/embed/${anime.trailerId}?autoplay=1`
+        : `https://vidlink.pro/anime/${anime.malId || anime.anilistId}/1`,
   },
 ];
 
-// HiAnime Player Modal with matching Server Selection Drawer
 function HiAnimePlayerModal({
   anime,
   onClose,
@@ -186,17 +180,18 @@ function HiAnimePlayerModal({
   const [currentEp, setCurrentEp] = useState(1);
   const [selectedServerId, setSelectedServerId] = useState("nitro");
   const [showServerDrawer, setShowServerDrawer] = useState(false);
+  const [iframeKey, setIframeKey] = useState(0);
 
   const totalEpisodes = Math.min(anime.episodes || 12, 100);
   const activeServer = SERVERS.find((s) => s.id === selectedServerId) || SERVERS[0];
-  const streamUrl = activeServer.getUrl(anime.malId || anime.anilistId, anime.anilistId, currentEp);
-  const hianimeSearchUrl = `https://hianime.to/search?keyword=${encodeURIComponent(anime.name.trim())}`;
+  const streamUrl = activeServer.getUrl(anime, currentEp);
+  const directWatchUrl = `https://hianime.to/search?keyword=${encodeURIComponent(anime.name.trim())}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-2 md:p-6 overflow-y-auto">
       <div className="relative w-full max-w-7xl bg-[#14151a] border border-[#2b2d38] rounded-xl shadow-2xl overflow-hidden flex flex-col my-auto">
         
-        {/* Top Header */}
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-3.5 bg-[#1b1c24] border-b border-[#2b2d38]">
           <div className="flex items-center gap-3">
             <span className="bg-[#ffb703] text-black font-black text-xs px-2.5 py-0.5 rounded tracking-wider">
@@ -221,14 +216,12 @@ function HiAnimePlayerModal({
           </button>
         </div>
 
-        {/* Video Area + Episode Drawer */}
+        {/* Video Viewport + Episode Drawer */}
         <div className="grid grid-cols-1 lg:grid-cols-4 bg-[#0a0a0d] relative">
-          
-          {/* Main Video Viewport */}
           <div className="lg:col-span-3 flex flex-col bg-black relative">
             <div className="relative aspect-video w-full bg-black flex items-center justify-center overflow-hidden">
               <iframe
-                key={`${anime.anilistId}-${currentEp}-${selectedServerId}`}
+                key={`${anime.anilistId}-${currentEp}-${selectedServerId}-${iframeKey}`}
                 src={streamUrl}
                 title={anime.name}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
@@ -239,8 +232,7 @@ function HiAnimePlayerModal({
 
             {/* Bottom Controls Bar */}
             <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 bg-[#191a22] border-t border-[#2b2d38]">
-              <div className="flex items-center gap-3">
-                {/* Server Selector Trigger */}
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowServerDrawer(true)}
                   className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#252631] hover:bg-[#333544] text-white text-xs font-bold transition border border-[#3d4052] cursor-pointer"
@@ -249,6 +241,14 @@ function HiAnimePlayerModal({
                   <span>Server:</span>
                   <span className="text-[#ffb703]">{activeServer.name}</span>
                   <ChevronRight className="w-3.5 h-3.5 text-[#8a8a95]" />
+                </button>
+
+                <button
+                  onClick={() => setIframeKey((k) => k + 1)}
+                  title="Reload Stream"
+                  className="p-2 rounded-lg bg-[#252631] hover:bg-[#333544] text-[#a0a0a8] hover:text-white transition cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
                 </button>
               </div>
 
@@ -265,19 +265,19 @@ function HiAnimePlayerModal({
                 </a>
 
                 <a
-                  href={hianimeSearchUrl}
+                  href={directWatchUrl}
                   target="_blank"
                   rel="noreferrer"
                   className="inline-flex items-center gap-1.5 text-xs text-black bg-[#ffb703] px-3 py-1 rounded font-bold hover:bg-[#ffc229] transition"
                 >
-                  <span>HiAnime Mirror</span>
+                  <span>HiAnime Player</span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               </div>
             </div>
           </div>
 
-          {/* Episode List Drawer */}
+          {/* Episode Drawer */}
           <div className="lg:col-span-1 bg-[#14151a] border-t lg:border-t-0 lg:border-l border-[#2b2d38] flex flex-col h-[320px] lg:h-auto">
             <div className="p-3 bg-[#1b1c24] border-b border-[#2b2d38] flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-[#e0e0e8] flex items-center gap-1.5">
@@ -309,9 +309,9 @@ function HiAnimePlayerModal({
             </div>
           </div>
 
-          {/* SERVER SELECTION SIDE-DRAWER (Matching Screenshot 1 & 2) */}
+          {/* Server Selection Side-Drawer */}
           {showServerDrawer && (
-            <div className="absolute inset-y-0 left-0 z-30 w-72 bg-[#0c0d10] border-r border-[#2b2d38] flex flex-col shadow-2xl animate-in slide-in-from-left duration-200">
+            <div className="absolute inset-y-0 left-0 z-30 w-72 bg-[#0c0d10] border-r border-[#2b2d38] flex flex-col shadow-2xl">
               <div className="flex items-center justify-between px-5 py-4 border-b border-[#20222c] bg-[#121318]">
                 <h3 className="text-sm font-bold text-white tracking-wide">Server</h3>
                 <button
@@ -364,7 +364,7 @@ function HiAnimePlayerModal({
           )}
         </div>
 
-        {/* Anime Information Footer */}
+        {/* Footer Details */}
         <div className="p-6 bg-[#14151a] border-t border-[#2b2d38] flex flex-col md:flex-row gap-6">
           {anime.poster && (
             <img
@@ -554,7 +554,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0f1015] text-[#e0e0e8] font-sans selection:bg-[#ffb703] selection:text-black">
-      {/* Top Header */}
       <header className="sticky top-0 z-40 bg-[#14151a]/95 backdrop-blur border-b border-[#252631] px-4 md:px-12 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           <div
@@ -615,7 +614,6 @@ export default function App() {
         </div>
       </header>
 
-      {/* Main View */}
       {query.trim() ? (
         <main className="max-w-7xl mx-auto px-4 md:px-12 py-10">
           <h2 className="text-xl md:text-2xl font-black text-white mb-2">
